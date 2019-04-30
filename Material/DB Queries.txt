@@ -1,0 +1,167 @@
+	/* Administrator Table */
+CREATE TABLE [dbo].[Administrator](
+	[id] [int] IDENTITY(101,1) primary key NOT NULL,
+	[name] [varchar](50) NOT NULL,
+	[phone] [varchar](11) NOT NULL,
+	[address] [varchar](max) NULL,
+	[email] [varchar](50) NULL,
+	[pass] [varchar](max) NOT NULL,
+	[registrationDate] [datetime] NULL,
+)
+
+	/* Customer Table */
+CREATE TABLE [dbo].[Customer](
+	[cid] [int] IDENTITY(100001,1) primary key NOT NULL,
+	[name] [varchar](50) NOT NULL,
+	[phone] [varchar](11) NOT NULL,
+	[address] [varchar](max) NULL,
+	[email] [varchar](50) NULL,
+	[pass] [varchar](max) NOT NULL,
+	[registrationDate] [datetime] NULL,
+)
+
+	/* Products Table */
+CREATE TABLE Products(
+	ProductID int identity(1000001,1) not null,
+	ProductName varchar(50) not null,
+	ProductPrice float not null,
+	ProductCatagoryID int not null,
+	ProductStock int not null,
+	NoOfSold int not null,
+	ProductImagePath varchar(100) not null,
+	ProductUpdateDate datetime not null
+	primary key(ProductID)
+)
+	
+	/* Catagory Table */
+CREATE TABLE Catagory(
+	CatagoryID int identity(1,1) primary key not null,
+	CatagoryName varchar(50) not null unique
+)
+
+
+	/* Stored Procedure => AddNewProduct_SP*/
+CREATE PROCEDURE AddNewProduct_SP
+	@ProductName varchar(50),
+	@ProductPrice float,
+	@ProductCatagoryID int,
+	@ProductStock int,
+	@ProductImagePath varchar(100) OUTPUT,
+	@ProductUpdateDate datetime
+AS
+BEGIN
+	INSERT INTO Products (ProductName, ProductPrice, ProductCatagoryID, NoOfSold, ProductStock, ProductImagePath , ProductUpdateDate) VALUES (@ProductName,@ProductPrice,@ProductCatagoryID,0, @ProductStock,'abc', @ProductUpdateDate);
+	SET @ProductImagePath = '~\ProductImages\' + CAST(SCOPE_IDENTITY() AS varchar(50)) +'.jpg';
+	UPDATE Products SET ProductImagePath = @ProductImagePath WHERE ProductID = SCOPE_IDENTITY();
+	SELECT @ProductImagePath = @ProductImagePath FROM Products WHERE ProductID = SCOPE_IDENTITY();
+END
+
+
+	/* Search Items By search textbox */
+SELECT ProductID,ProductName,ProductPrice,ProductImagePath, CatagoryID, CatagoryName 
+FROM Products 
+join Catagory 
+ON Products.ProductCatagoryID = Catagory.CatagoryID 
+WHERE Products.ProductName like '%clothing%' OR Catagory.CatagoryName like '%clothing%'
+
+
+
+	/* Order Table */
+CREATE TABLE [Order](
+	OrderID  int primary key identity(1001,1),
+	CustomerID int,
+	RecieverName varchar(50) not null,
+	ReceiverAddress varchar(max) not null,
+	Phone varchar(11) not null,
+	TotalPayment float not null,
+	DateOrdered DateTime not null,
+)
+
+
+
+	/* OrderDetail Table */
+CREATE TABLE OrderDetail(
+	OrderDetailID int primary key identity(1000001,1),
+	OrderID int,
+	ProductID int,
+	ProdudctQuentity int,
+	UnitPrice float,
+)
+
+
+
+	/* Stored Procedure => SPGenerateOrder  */
+CREATE  PROC SPGenerateOrder 
+	@OrderID int output,
+	@CustomerID int,
+	@RecieverName varchar(50),
+	@ReceiverAddress varchar(max),
+	@Phone varchar(11),
+	@DateOrdered datetime
+
+AS
+BEGIN
+
+	INSERT INTO [order] (CustomerID,RecieverName,ReceiverAddress,TotalPayment,Phone,DateOrdered) 
+	VALUES(@CustomerID,@RecieverName,@ReceiverAddress,0,@Phone,@DateOrdered);
+	SET @OrderID = SCOPE_IDENTITY();
+END
+
+
+
+	/* Stored Procedure => SPCreateOrderDetails  */
+CREATE PROC SPCreateOrderDetails  
+	@OrderID int,  
+	@ProductID int,  
+	@ProdudctQuentity int  
+  
+AS  
+BEGIN  
+	UPDATE Products SET ProductStock = ProductStock - @ProdudctQuentity , NoOfSold = NoOfSold + @ProdudctQuentity WHERE ProductID = @ProductID;  
+	INSERT INTO OrderDetail (OrderID , ProductID , ProdudctQuentity, UnitPrice) VALUES(@OrderID, @ProductID, @ProdudctQuentity, (SELECT ProductPrice FROM Products WHERE ProductID = @ProductID));  
+END
+
+
+
+
+	/* CREATE FK Product - Catagory*/
+ALTER TABLE Products
+ADD CONSTRAINT Catagory_CatagoryID_FK
+FOREIGN KEY (ProductCatagoryID) REFERENCES Catagory(CatagoryID)
+
+
+	/* CREATE FK Order - Customer*/
+ALTER TABLE [Order]
+ADD CONSTRAINT Customer_CID_FK
+FOREIGN KEY(CustomerID) REFERENCES Customer(cid)
+
+
+	/* CREATE FK OrderDetail - Order*/
+ALTER TABLE OrderDetail
+ADD CONSTRAINT Order_OrderID_FK 
+FOREIGN KEY(OrderID) REFERENCES [Order](OrderID)
+
+
+	/* CREATE FK OrderDetail - Products*/
+ALTER TABLE OrderDetail
+ADD CONSTRAINT Products_ProductID_FK 
+FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
+
+
+	/* Stored Procedure => SPGenerateSalesReport*/
+ALTER PROC SPGenerateSalesReport  
+@Month varchar(10),  
+@Year varchar(10)  
+  
+AS  
+BEGIN  
+  
+SELECT OD.ProductID As 'Product ID', P.ProductName 'Product Name',SUM(OD.ProdudctQuentity) AS 'Sold Qty' , OD.UnitPrice AS 'Unit Price' , SUM(OD.ProdudctQuentity * OD.UnitPrice) AS 'Total Price'   
+FROM OrderDetail OD  
+JOIN [Order] O ON OD.OrderID = O.OrderID  
+JOIN Products P ON OD.ProductID = P.ProductID  
+WHERE YEAR(O.DateOrdered) like @Year AND MONTH(O.DateOrdered) like @Month  
+GROUP BY OD.ProductID , P.ProductName, OD.UnitPrice  
+ORDER BY OD.ProductID  
+  
+END

@@ -1,0 +1,1 @@
+in SalesReport table diffrent prices(updated price) show diffeent rows
